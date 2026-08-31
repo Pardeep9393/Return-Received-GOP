@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Return Received Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --card2:#111827; --accent:#3b82f6; --accent2:#22c55e;
+    --danger:#ef4444; --text:#e2e8f0; --muted:#94a3b8; --border:#334155;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+  header{background:var(--card2);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);}
+  header h1{font-size:20px;margin:0;}
+  header .scanner-tag{font-size:14px;color:var(--muted);}
+  .container{max-width:900px;margin:0 auto;padding:24px 16px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px;}
+  .card h2{margin-top:0;font-size:16px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;margin-top:14px;}
+  select, input[type=text]{
+    width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card2);color:var(--text);font-size:15px;
+  }
+  input[type=text]:focus, select:focus{outline:2px solid var(--accent);}
+  .btn{padding:12px 20px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:.15s;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:#2563eb;}
+  .btn-success{background:var(--accent2);color:#052e16;}
+  .btn-success:hover{background:#16a34a;}
+  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+  .btn-outline:hover{border-color:var(--accent);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .row > *{flex:1;min-width:180px;}
+  .manifest-box{
+    background:var(--card2);border:1px dashed var(--accent);border-radius:10px;
+    padding:14px 18px;margin:16px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  }
+  .manifest-box .label{font-size:12px;color:var(--muted);}
+  .manifest-box .value{font-size:18px;font-weight:700;color:var(--accent);}
+  table{width:100%;border-collapse:collapse;margin-top:14px;}
+  th, td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:14px;}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;}
+  .scan-count{font-size:13px;color:var(--muted);margin-top:8px;}
+  .actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;}
+  .hidden{display:none !important;}
+  .toast{
+    position:fixed;top:20px;right:20px;background:var(--card2);border:1px solid var(--accent2);
+    color:var(--text);padding:14px 20px;border-radius:8px;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4);
+    max-width:320px;
+  }
+  .toast.error{border-color:var(--danger);}
+  .manage-toggle{font-size:13px;color:var(--accent);cursor:pointer;text-decoration:underline;margin-top:10px;display:inline-block;}
+  .manage-list{margin-top:10px;font-size:13px;}
+  .manage-list .item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);}
+  .manage-list .item button{background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;}
+  #clientListItems, #courierListItems{max-height:200px;overflow-y:auto;}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap;}
+  .tab{padding:8px 14px;cursor:pointer;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  input[type=file]{
+    width:100%;padding:10px;border-radius:8px;border:1px dashed var(--border);
+    background:var(--card2);color:var(--muted);font-size:13px;margin-top:6px;
+  }
+  .bulk-preview{margin-top:12px;max-height:220px;overflow-y:auto;font-size:12px;}
+  .bulk-preview table{margin-top:0;}
+  .bulk-preview th, .bulk-preview td{padding:6px 10px;font-size:12px;}
+  .bulk-preview .row-error{color:var(--danger);}
+  .badge{display:inline-block;background:var(--card2);border:1px solid var(--border);padding:2px 8px;border-radius:20px;font-size:12px;color:var(--muted);}
+  .summary-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
+  .footer-note{font-size:12px;color:var(--muted);text-align:center;margin-top:20px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 Return Received Dashboard</h1>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <a href="summary-dashboard.html" style="color:var(--accent);font-size:13px;text-decoration:none;">📊 View Summary Dashboard →</a>
+    <div class="scanner-tag" id="scannerTag">Not logged in</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- STEP 0: LOGIN -->
+  <div class="card" id="loginCard">
+    <h2>Step 1 — Scanner Login</h2>
+    <label for="scannerSelect">Select your name</label>
+    <select id="scannerSelect"></select>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="doLogin()">Login</button>
+    </div>
+    <span class="manage-toggle" onclick="toggleAddScanner()">+ Add new scanner name</span>
+    <div class="row hidden" id="addScannerBox" style="margin-top:10px;">
+      <input type="text" id="newScannerName" placeholder="New scanner name">
+      <button class="btn btn-outline" onclick="addScannerOnly()">Add</button>
+    </div>
+  </div>
+
+  <!-- STEP 1: CLIENT + COURIER SELECT -->
+  <div class="card hidden" id="selectCard">
+    <h2>Step 2 — Select Client &amp; Courier</h2>
+    <div class="row">
+      <div>
+        <label for="clientSelect">Client Name</label>
+        <select id="clientSelect"></select>
+      </div>
+      <div>
+        <label for="courierSelect">Courier Name</label>
+        <select id="courierSelect"></select>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="startCourierScan()">Start Scan</button>
+      <button class="btn btn-outline" onclick="refreshFromSheet()">🔄 Refresh List</button>
+    </div>
+    <span class="manage-toggle" onclick="toggleManage()">+ Manage Client / Courier / Email</span>
+    <div class="manage-list hidden" id="manageBox">
+      <div class="tabs">
+        <div class="tab active" id="tabBtnClients" onclick="switchManageTab('clients')">Add Client</div>
+        <div class="tab" id="tabBtnCouriers" onclick="switchManageTab('couriers')">Add Courier</div>
+        <div class="tab" id="tabBtnBulk" onclick="switchManageTab('bulk')">Bulk Upload</div>
+        <div class="tab" id="tabBtnEmails" onclick="switchManageTab('emails')">Client Emails</div>
+      </div>
+
+      <!-- TAB: Add Client -->
+      <div id="manageTabClients">
+        <div class="row">
+          <input type="text" id="newClientName" placeholder="New client name">
+          <button class="btn btn-outline" onclick="addClientOnly()">Add Client</button>
+        </div>
+        <div id="clientListItems" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- TAB: Add Courier -->
+      <div id="manageTabCouriers" class="hidden">
+        <label for="courierClientSelect">Client</label>
+        <select id="courierClientSelect" onchange="renderCourierListForClient()"></select>
+
+        <label for="existingCourierSelect" style="margin-top:14px;">Pick from already-uploaded couriers</label>
+        <div class="row">
+          <select id="existingCourierSelect"></select>
+          <button class="btn btn-outline" onclick="assignExistingCourier()">Assign to Client</button>
+        </div>
+
+        <label for="newCourierName">Or add a brand-new courier name</label>
+        <div class="row">
+          <input type="text" id="newCourierName" placeholder="New courier name">
+          <button class="btn btn-outline" onclick="addCourierOnly()">Add Courier</button>
+        </div>
+        <div id="courierListItems" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- TAB: Bulk Upload (separate files for Client and Courier) -->
+      <div id="manageTabBulk" class="hidden">
+
+        <h3 style="font-size:13px;color:var(--text);margin-bottom:4px;">1. Bulk Upload Clients</h3>
+        <label>CSV or Excel — single column: <strong>Client Name</strong></label>
+        <input type="file" id="bulkClientFile" accept=".csv,.xlsx,.xls" onchange="handleBulkClientUpload(event)">
+        <div class="bulk-preview" id="bulkClientPreview"></div>
+        <div class="actions" id="bulkClientActions" style="display:none;">
+          <button class="btn btn-success" onclick="confirmBulkClientUpload()">Confirm &amp; Add All Clients</button>
+          <button class="btn btn-outline" onclick="cancelBulkUpload('client')">Cancel</button>
+        </div>
+
+        <h3 style="font-size:13px;color:var(--text);margin:22px 0 4px;border-top:1px solid var(--border);padding-top:16px;">2. Bulk Upload Couriers</h3>
+        <label for="bulkCourierClientSelect">Select client these couriers belong to</label>
+        <select id="bulkCourierClientSelect"></select>
+        <label style="margin-top:12px;">CSV or Excel — single column: <strong>Courier Name</strong></label>
+        <input type="file" id="bulkCourierFile" accept=".csv,.xlsx,.xls" onchange="handleBulkCourierUpload(event)">
+        <div class="bulk-preview" id="bulkCourierPreview"></div>
+        <div class="actions" id="bulkCourierActions" style="display:none;">
+          <button class="btn btn-success" onclick="confirmBulkCourierUpload()">Confirm &amp; Add All Couriers</button>
+          <button class="btn btn-outline" onclick="cancelBulkUpload('courier')">Cancel</button>
+        </div>
+      </div>
+
+      <!-- TAB: Client Emails -->
+      <div id="manageTabEmails" class="hidden">
+        <div class="row">
+          <select id="emailClientSelect"></select>
+          <input type="text" id="newToMail" placeholder="To Mail">
+          <input type="text" id="newCcMail" placeholder="CC Mail (comma separated, optional)">
+          <button class="btn btn-outline" onclick="addEmailOnly()">Add / Update</button>
+        </div>
+        <div id="emailListItems" style="margin-top:10px;"></div>
+
+        <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
+          <label>Bulk Upload CSV or Excel — columns: <strong>Client Name, To Mail, CC Mail</strong></label>
+          <input type="file" id="bulkEmailFile" accept=".csv,.xlsx,.xls" onchange="handleBulkEmailUpload(event)">
+          <div class="bulk-preview" id="bulkEmailPreview"></div>
+          <div class="actions" id="bulkEmailActions" style="display:none;">
+            <button class="btn btn-success" onclick="confirmBulkEmailUpload()">Confirm &amp; Add All</button>
+            <button class="btn btn-outline" onclick="cancelBulkUpload('email')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: SCANNING SCREEN -->
+  <div class="card hidden" id="scanCard">
+    <h2>Step 3 — Scan AWB</h2>
+    <div class="manifest-box">
+      <div>
+        <div class="label">Manifest Number</div>
+        <div class="value" id="manifestNoDisplay">—</div>
+      </div>
+      <div>
+        <div class="label">Client / Courier</div>
+        <div class="value" id="clientCourierDisplay" style="font-size:14px;">—</div>
+      </div>
+    </div>
+    <label for="awbInput">Scan AWB Number (barcode scanner auto-enters)</label>
+    <input type="text" id="awbInput" autocomplete="off" placeholder="Scan here..." onkeydown="handleScanKey(event)">
+    <div class="scan-count">Total scanned: <span id="scanCount">0</span></div>
+
+    <table id="scanTable">
+      <thead>
+        <tr><th>#</th><th>AWB Number</th><th>Scan Time</th><th></th></tr>
+      </thead>
+      <tbody id="scanTableBody"></tbody>
+    </table>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="finishCourier('new')" id="newScanBtn">🔄 New Scan (Next Courier)</button>
+      <button class="btn btn-success" onclick="finishCourier('done')" id="allDoneBtn">✅ All Scan Done (Close Session)</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: SESSION SUMMARY -->
+  <div class="card hidden" id="summaryCard">
+    <h2>Session Summary</h2>
+    <div id="summaryList"></div>
+
+    <h2 style="margin-top:24px;">Scanner + Courier-wise Summary</h2>
+    <table>
+      <thead><tr><th>Scanner</th><th>Courier</th><th>Total AWB</th></tr></thead>
+      <tbody id="courierSummaryBody"></tbody>
+    </table>
+
+    <h2 style="margin-top:24px;">Client-wise Total</h2>
+    <table>
+      <thead><tr><th>Client</th><th>Total AWB</th></tr></thead>
+      <tbody id="clientSummaryBody"></tbody>
+    </table>
+
+    <div class="actions">
+      <button class="btn btn-success" onclick="sendMailButtonClick()" id="sendMailBtn">📧 Send Mail</button>
+      <button class="btn btn-outline" onclick="downloadSessionCSV()">⬇️ Download Report (CSV)</button>
+      <button class="btn btn-primary" onclick="resetToClientSelect()">Start New Session</button>
+    </div>
+  </div>
+
+  <div class="footer-note">Return Received Dashboard · Emiza</div>
+</div>
+
+<div id="toastBox"></div>
+
+<script>
+/* ============================================================
+   CONFIG — set this to your deployed Google Apps Script Web App URL
+   ============================================================ */
+const API_URL = "https://script.google.com/macros/s/AKfycbyBPaTIc0uldPFGAS_TRLZzsKSW3bUkXHsPR8aaRFaArCZPe13mtncmqhbfq_-gHmih/exec";
+
+/* ============================================================
+   CLIENT / COURIER MASTER SHEET (read-only source)
+   Column A = Client Name, Column D = Courier Name
+   Sheet must be shared as "Anyone with the link can view".
+   ============================================================ */
+const CLIENT_COURIER_SHEET_ID = "1Hgj7LvjkSGDMEDm8JxSWWG8bxm126T5MT6Z8kXvyNTM";
+const CLIENT_COURIER_SHEET_GID = "547577254";
+
+/* ============================================================
+   CLIENT EMAIL SHEET (read-only source) — tab "Emails"
+   Column A = Client Name, Column B = TO, Column C = CC
+   Sheet must be shared as "Anyone with the link can view".
+   ============================================================ */
+const CLIENT_EMAIL_SHEET_ID = "1Hgj7LvjkSGDMEDm8JxSWWG8bxm126T5MT6Z8kXvyNTM";
+const CLIENT_EMAIL_SHEET_GID = "1044146301";
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let CONFIG = { scanners: [], clients: {}, emails: {} }; // clients: { clientName: [courier1, courier2] }; emails: { clientName: {to, cc} }
+let bulkParsedRows = { client: [], courier: [], email: [] }; // pending parsed rows awaiting confirmation
+let currentScanner = "";
+let currentClient = "";
+let currentCourier = "";
+let currentManifest = "";
+let scanRows = []; // {awb, time}
+let sessionLog = []; // finished couriers this session: {manifest, client, courier, count}
+let sessionAllRows = []; // every scanned row this session: {scanDate, client, courier, scanner, awb} — used for summary + CSV download
+
+/* ============================================================
+   INIT — load config (local fallback if API not set yet)
+   ============================================================ */
+window.onload = async function() {
+  await loadConfig();
+  await loadClientCourierFromSheet();
+  await loadClientEmailsFromSheet();
+  renderLoginDropdown();
+  renderClientDropdown();
+};
+
+/* ============================================================
+   LOAD CLIENT + COURIER LIST FROM GOOGLE SHEET (gviz API)
+   Column A -> client name, Column D -> courier name.
+   Merges into CONFIG.clients (does not remove manually-added ones).
+   ============================================================ */
+async function loadClientCourierFromSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${CLIENT_COURIER_SHEET_ID}/gviz/tq?tqx=out:json&gid=${CLIENT_COURIER_SHEET_GID}&range=A2:D`;
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const jsonStart = text.indexOf("{");
+    const jsonEnd = text.lastIndexOf("}");
+    const json = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+    const rows = (json.table && json.table.rows) || [];
+    let added = 0;
+    rows.forEach(r => {
+      const cells = r.c || [];
+      const client = cells[0] && cells[0].v != null ? String(cells[0].v).trim() : "";
+      const courier = cells[3] && cells[3].v != null ? String(cells[3].v).trim() : "";
+      if (!client || !courier) return;
+      if (!CONFIG.clients[client]) CONFIG.clients[client] = [];
+      if (!CONFIG.clients[client].includes(courier)) {
+        CONFIG.clients[client].push(courier);
+        added++;
+      }
+    });
+    if (added) console.log(`Synced ${added} client-courier pair(s) from sheet`);
+  } catch (e) {
+    console.warn("Could not load client/courier list from sheet", e);
+    showToast("⚠️ Could not load client/courier list from sheet", true);
+  }
+}
+
+/* ============================================================
+   LOAD CLIENT EMAILS FROM GOOGLE SHEET (gviz API) — tab "Emails"
+   Column A -> client name, Column B -> TO, Column C -> CC.
+   Sheet values always win over locally/backend-saved emails, so
+   the sheet is the single source of truth for client emails.
+   ============================================================ */
+async function loadClientEmailsFromSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${CLIENT_EMAIL_SHEET_ID}/gviz/tq?tqx=out:json&gid=${CLIENT_EMAIL_SHEET_GID}&range=A2:C`;
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const jsonStart = text.indexOf("{");
+    const jsonEnd = text.lastIndexOf("}");
+    const json = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+    const rows = (json.table && json.table.rows) || [];
+    if (!CONFIG.emails) CONFIG.emails = {};
+    let count = 0;
+    rows.forEach(r => {
+      const cells = r.c || [];
+      const client = cells[0] && cells[0].v != null ? String(cells[0].v).trim() : "";
+      const to = cells[1] && cells[1].v != null ? String(cells[1].v).trim() : "";
+      const cc = cells[2] && cells[2].v != null ? String(cells[2].v).trim() : "";
+      if (!client || !to) return;
+      CONFIG.emails[client] = { to, cc };
+      count++;
+    });
+    if (count) console.log(`Synced ${count} client email(s) from sheet`);
+  } catch (e) {
+    console.warn("Could not load client emails from sheet", e);
+    showToast("⚠️ Could not load client emails from sheet", true);
+  }
+}
+
+async function refreshFromSheet() {
+  await loadClientCourierFromSheet();
+  await loadClientEmailsFromSheet();
+  renderClientDropdown();
+  showToast("🔄 Client/Courier/Email list refreshed from sheet");
+}
+
+async function loadConfig() {
+  const local = localStorageSafeGet();
+  if (local) CONFIG = local;
+
+  if (API_URL && API_URL.indexOf("PASTE_YOUR") === -1) {
+    try {
+      const res = await fetch(API_URL + "?action=getConfig");
+      const data = await res.json();
+      if (data && data.scanners) {
+        CONFIG = data;
+      }
+    } catch (e) {
+      console.warn("Could not reach backend, using local config", e);
+    }
+  } else {
+    // No backend configured yet — seed with placeholder so UI is usable
+    if (!CONFIG.scanners.length) CONFIG.scanners = ["Scanner 1", "Scanner 2"];
+    if (!Object.keys(CONFIG.clients).length) CONFIG.clients = { "Sample Client": ["Delhivery", "Bluedart"] };
+    if (!CONFIG.emails) CONFIG.emails = {};
+  }
+  if (!CONFIG.emails) CONFIG.emails = {};
+}
+
+// NOTE: browser storage APIs are disabled inside Claude artifacts.
+// These are safe no-ops here; once hosted on GitHub Pages (outside the
+// artifact sandbox) they will work normally in a real browser.
+function localStorageSafeGet(){ return null; }
+function localStorageSafeSet(){ /* no-op in sandbox */ }
+
+/* ============================================================
+   LOGIN
+   ============================================================ */
+function renderLoginDropdown() {
+  const sel = document.getElementById("scannerSelect");
+  sel.innerHTML = "";
+  CONFIG.scanners.forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name; opt.textContent = name;
+    sel.appendChild(opt);
+  });
+}
+
+function toggleAddScanner() {
+  document.getElementById("addScannerBox").classList.toggle("hidden");
+}
+
+function addScannerOnly() {
+  const name = document.getElementById("newScannerName").value.trim();
+  if (!name) { showToast("Enter a scanner name", true); return; }
+  if (CONFIG.scanners.includes(name)) {
+    showToast(name + " already exists", true);
+    return;
+  }
+  CONFIG.scanners.push(name);
+  document.getElementById("newScannerName").value = "";
+  renderLoginDropdown();
+  document.getElementById("scannerSelect").value = name;
+  document.getElementById("addScannerBox").classList.add("hidden");
+  showToast("✅ Scanner added: " + name);
+  syncConfigToBackend();
+}
+
+function doLogin() {
+  currentScanner = document.getElementById("scannerSelect").value;
+  if (!currentScanner) { showToast("Select a scanner name first", true); return; }
+  document.getElementById("scannerTag").textContent = "👤 " + currentScanner;
+  document.getElementById("loginCard").classList.add("hidden");
+  document.getElementById("selectCard").classList.remove("hidden");
+}
+
+/* ============================================================
+   CLIENT / COURIER SELECT
+   ============================================================ */
+function renderClientDropdown() {
+  const sel = document.getElementById("clientSelect");
+  sel.innerHTML = "";
+  Object.keys(CONFIG.clients).forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  renderCourierSelectDropdown();
+  renderManageTabs();
+}
+
+// Courier dropdown is independent of Client — always shows the full master
+// list of couriers (unique, across all clients), not filtered by client.
+function renderCourierSelectDropdown() {
+  const courierSel = document.getElementById("courierSelect");
+  const prev = courierSel.value;
+  courierSel.innerHTML = "";
+  getCourierMasterList().forEach(cr => {
+    const opt = document.createElement("option");
+    opt.value = cr; opt.textContent = cr;
+    courierSel.appendChild(opt);
+  });
+  if (getCourierMasterList().includes(prev)) courierSel.value = prev;
+}
+
+function toggleManage() {
+  document.getElementById("manageBox").classList.toggle("hidden");
+  renderManageTabs();
+}
+
+function switchManageTab(tab) {
+  ["clients","couriers","bulk","emails"].forEach(t => {
+    document.getElementById("tabBtn" + capitalize(t)).classList.toggle("active", tab === t);
+    document.getElementById("manageTab" + capitalize(t)).classList.toggle("hidden", tab !== t);
+  });
+  if (tab === "couriers") renderCourierClientDropdown();
+  if (tab === "bulk") renderBulkCourierClientDropdown();
+  if (tab === "emails") { renderEmailClientDropdown(); renderEmailListItems(); }
+}
+function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function renderManageTabs() {
+  renderClientListItems();
+  renderCourierClientDropdown();
+  renderBulkCourierClientDropdown();
+  renderEmailClientDropdown();
+  renderEmailListItems();
+}
+
+/* ---- TAB 1: Add / manage Clients ---- */
+function addClientOnly() {
+  const client = document.getElementById("newClientName").value.trim();
+  if (!client) { showToast("Enter a client name", true); return; }
+  if (!CONFIG.clients[client]) CONFIG.clients[client] = [];
+  document.getElementById("newClientName").value = "";
+  renderClientDropdown();
+  renderClientListItems();
+  showToast("Client added: " + client);
+  syncConfigToBackend();
+}
+
+function renderClientListItems() {
+  const box = document.getElementById("clientListItems");
+  box.innerHTML = "";
+  Object.keys(CONFIG.clients).forEach(client => {
+    const div = document.createElement("div");
+    div.className = "item";
+    const courierCount = CONFIG.clients[client].length;
+    div.innerHTML = `<span>${client} <span class="badge">${courierCount} courier${courierCount!==1?'s':''}</span></span>
+      <button onclick="removeClient('${client.replace(/'/g,"\\'")}')">Remove</button>`;
+    box.appendChild(div);
+  });
+}
+
+function removeClient(client) {
+  delete CONFIG.clients[client];
+  renderClientDropdown();
+  renderClientListItems();
+  renderCourierClientDropdown();
+  renderBulkCourierClientDropdown();
+  syncConfigToBackend();
+}
+
+/* ---- TAB 2: Add / manage Couriers (per client) ---- */
+function renderCourierClientDropdown() {
+  const sel = document.getElementById("courierClientSelect");
+  const prev = sel.value;
+  sel.innerHTML = "";
+  Object.keys(CONFIG.clients).forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  if (Object.keys(CONFIG.clients).includes(prev)) sel.value = prev;
+  renderCourierListForClient();
+  renderExistingCourierDropdown();
+}
+
+// Global master list — every unique courier name seen across all clients
+// (added manually, via bulk courier upload, or bulk client-courier import).
+function getCourierMasterList() {
+  const set = new Set();
+  Object.values(CONFIG.clients).forEach(list => list.forEach(c => set.add(c)));
+  return Array.from(set).sort((a,b) => a.localeCompare(b));
+}
+
+function renderExistingCourierDropdown() {
+  const sel = document.getElementById("existingCourierSelect");
+  if (!sel) return;
+  const master = getCourierMasterList();
+  const prev = sel.value;
+  sel.innerHTML = "";
+  if (!master.length) {
+    const opt = document.createElement("option");
+    opt.value = ""; opt.textContent = "No couriers uploaded yet";
+    sel.appendChild(opt);
+    return;
+  }
+  master.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  if (master.includes(prev)) sel.value = prev;
+}
+
+function assignExistingCourier() {
+  const client = document.getElementById("courierClientSelect").value;
+  const courier = document.getElementById("existingCourierSelect").value;
+  if (!client) { showToast("Add a client first (Add Client tab)", true); return; }
+  if (!courier) { showToast("No courier selected", true); return; }
+  if (!CONFIG.clients[client].includes(courier)) {
+    CONFIG.clients[client].push(courier);
+    renderClientDropdown();
+    renderCourierListForClient();
+    showToast(`Assigned "${courier}" to ${client}`);
+    syncConfigToBackend();
+  } else {
+    showToast(courier + " is already assigned to " + client, true);
+  }
+}
+
+function addCourierOnly() {
+  const client = document.getElementById("courierClientSelect").value;
+  const courier = document.getElementById("newCourierName").value.trim();
+  if (!client) { showToast("Add a client first (Add Client tab)", true); return; }
+  if (!courier) { showToast("Enter a courier name", true); return; }
+  if (!CONFIG.clients[client].includes(courier)) CONFIG.clients[client].push(courier);
+  document.getElementById("newCourierName").value = "";
+  renderClientDropdown();
+  renderCourierListForClient();
+  renderExistingCourierDropdown();
+  showToast("Courier added to " + client + ": " + courier);
+  syncConfigToBackend();
+}
+
+function renderCourierListForClient() {
+  const client = document.getElementById("courierClientSelect").value;
+  const box = document.getElementById("courierListItems");
+  box.innerHTML = "";
+  (CONFIG.clients[client] || []).forEach(courier => {
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `<span>${courier}</span>
+      <button onclick="removeCourier('${client.replace(/'/g,"\\'")}','${courier.replace(/'/g,"\\'")}')">Remove</button>`;
+    box.appendChild(div);
+  });
+}
+
+function removeCourier(client, courier) {
+  CONFIG.clients[client] = CONFIG.clients[client].filter(c => c !== courier);
+  renderClientDropdown();
+  renderCourierListForClient();
+  renderExistingCourierDropdown();
+  syncConfigToBackend();
+}
+
+
+/* ---- BULK UPLOAD: Client + Courier ---- */
+function readFileAsRows(file, callback) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+      callback(rows);
+    } catch (err) {
+      showToast("Could not read file — check format", true);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function findCol(header, names) {
+  const norm = header.map(h => String(h).trim().toLowerCase());
+  for (const n of names) {
+    const idx = norm.indexOf(n);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function handleBulkClientUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  readFileAsRows(file, rows => {
+    if (rows.length < 1) { showToast("File has no data", true); return; }
+    const header = rows[0];
+    let clientCol = findCol(header, ["client name", "client"]);
+    let startRow = 1;
+    if (clientCol === -1) { clientCol = 0; startRow = 0; } // no header row, treat col A as data
+    const parsed = [];
+    for (let i = startRow; i < rows.length; i++) {
+      const client = String(rows[i][clientCol] || "").trim();
+      if (client) parsed.push({ client });
+    }
+    bulkParsedRows.client = parsed;
+    renderBulkPreview("bulkClientPreview", parsed.map(r => [r.client]), ["Client Name"]);
+    document.getElementById("bulkClientActions").style.display = parsed.length ? "flex" : "none";
+    if (!parsed.length) showToast("No valid rows found", true);
+  });
+}
+
+function confirmBulkClientUpload() {
+  let added = 0;
+  bulkParsedRows.client.forEach(r => {
+    if (!CONFIG.clients[r.client]) { CONFIG.clients[r.client] = []; added++; }
+  });
+  renderClientDropdown();
+  showToast(`✅ Added ${added} new clients`);
+  cancelBulkUpload("client");
+  syncConfigToBackend();
+}
+
+/* ---- BULK UPLOAD: Couriers only (for one selected client) ---- */
+function handleBulkCourierUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const client = document.getElementById("bulkCourierClientSelect").value;
+  if (!client) { showToast("Select a client first", true); event.target.value = ""; return; }
+  readFileAsRows(file, rows => {
+    if (rows.length < 1) { showToast("File has no data", true); return; }
+    const header = rows[0];
+    let courierCol = findCol(header, ["courier name", "courier"]);
+    let startRow = 1;
+    if (courierCol === -1) { courierCol = 0; startRow = 0; } // no header row, treat col A as data
+    const parsed = [];
+    for (let i = startRow; i < rows.length; i++) {
+      const courier = String(rows[i][courierCol] || "").trim();
+      if (courier) parsed.push({ client, courier });
+    }
+    bulkParsedRows.courier = parsed;
+    renderBulkPreview("bulkCourierPreview", parsed.map(r => [r.courier]), ["Courier Name (→ " + client + ")"]);
+    document.getElementById("bulkCourierActions").style.display = parsed.length ? "flex" : "none";
+    if (!parsed.length) showToast("No valid rows found", true);
+  });
+}
+
+function confirmBulkCourierUpload() {
+  let added = 0;
+  bulkParsedRows.courier.forEach(r => {
+    if (!CONFIG.clients[r.client]) CONFIG.clients[r.client] = [];
+    if (!CONFIG.clients[r.client].includes(r.courier)) {
+      CONFIG.clients[r.client].push(r.courier);
+      added++;
+    }
+  });
+  renderClientDropdown();
+  showToast(`✅ Added ${added} couriers`);
+  cancelBulkUpload("courier");
+  syncConfigToBackend();
+}
+
+function renderBulkCourierClientDropdown() {
+  const sel = document.getElementById("bulkCourierClientSelect");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = "";
+  Object.keys(CONFIG.clients).forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  if (Object.keys(CONFIG.clients).includes(prev)) sel.value = prev;
+}
+
+
+/* ---- BULK UPLOAD: Client Emails ---- */
+function handleBulkEmailUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  readFileAsRows(file, rows => {
+    if (rows.length < 2) { showToast("File has no data rows", true); return; }
+    const header = rows[0];
+    const clientCol = findCol(header, ["client name", "client"]);
+    const toCol = findCol(header, ["to mail", "to email", "to"]);
+    const ccCol = findCol(header, ["cc mail", "cc email", "cc"]);
+    if (clientCol === -1 || toCol === -1) {
+      showToast("Header must have 'Client Name' and 'To Mail' columns", true);
+      return;
+    }
+    const parsed = [];
+    for (let i = 1; i < rows.length; i++) {
+      const client = String(rows[i][clientCol] || "").trim();
+      const to = String(rows[i][toCol] || "").trim();
+      const cc = ccCol !== -1 ? String(rows[i][ccCol] || "").trim() : "";
+      if (client && to) parsed.push({ client, to, cc });
+    }
+    bulkParsedRows.email = parsed;
+    renderBulkPreview("bulkEmailPreview", parsed.map(r => [r.client, r.to, r.cc]), ["Client Name", "To Mail", "CC Mail"]);
+    document.getElementById("bulkEmailActions").style.display = parsed.length ? "flex" : "none";
+    if (!parsed.length) showToast("No valid rows found", true);
+  });
+}
+
+function confirmBulkEmailUpload() {
+  bulkParsedRows.email.forEach(r => {
+    CONFIG.emails[r.client] = { to: r.to, cc: r.cc };
+  });
+  renderEmailListItems();
+  showToast(`✅ Added/updated ${bulkParsedRows.email.length} client email entries`);
+  cancelBulkUpload("email");
+  syncConfigToBackend();
+}
+
+function cancelBulkUpload(which) {
+  if (which === "client") {
+    bulkParsedRows.client = [];
+    document.getElementById("bulkClientPreview").innerHTML = "";
+    document.getElementById("bulkClientActions").style.display = "none";
+    document.getElementById("bulkClientFile").value = "";
+  } else if (which === "courier") {
+    bulkParsedRows.courier = [];
+    document.getElementById("bulkCourierPreview").innerHTML = "";
+    document.getElementById("bulkCourierActions").style.display = "none";
+    document.getElementById("bulkCourierFile").value = "";
+  } else {
+    bulkParsedRows.email = [];
+    document.getElementById("bulkEmailPreview").innerHTML = "";
+    document.getElementById("bulkEmailActions").style.display = "none";
+    document.getElementById("bulkEmailFile").value = "";
+  }
+}
+
+function renderBulkPreview(elId, rows, headers) {
+  const box = document.getElementById(elId);
+  if (!rows.length) { box.innerHTML = ""; return; }
+  let html = `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>`;
+  rows.slice(0, 50).forEach(r => {
+    html += `<tr>${r.map(c => `<td>${c || "—"}</td>`).join("")}</tr>`;
+  });
+  html += "</tbody></table>";
+  if (rows.length > 50) html += `<div style="padding:8px;color:var(--muted);">...and ${rows.length - 50} more rows</div>`;
+  box.innerHTML = html;
+}
+
+/* ---- Client Emails (manual add) ---- */
+function renderEmailClientDropdown() {
+  const sel = document.getElementById("emailClientSelect");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = "";
+  Object.keys(CONFIG.clients).forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  if (Object.keys(CONFIG.clients).includes(prev)) sel.value = prev;
+}
+
+function addEmailOnly() {
+  const client = document.getElementById("emailClientSelect").value;
+  const to = document.getElementById("newToMail").value.trim();
+  const cc = document.getElementById("newCcMail").value.trim();
+  if (!client) { showToast("Add a client first (Add Client tab)", true); return; }
+  if (!to) { showToast("Enter a To Mail", true); return; }
+  CONFIG.emails[client] = { to, cc };
+  document.getElementById("newToMail").value = "";
+  document.getElementById("newCcMail").value = "";
+  renderEmailListItems();
+  showToast("Email saved for " + client);
+  syncConfigToBackend();
+}
+
+function renderEmailListItems() {
+  const box = document.getElementById("emailListItems");
+  if (!box) return;
+  box.innerHTML = "";
+  Object.keys(CONFIG.emails).forEach(client => {
+    const e = CONFIG.emails[client];
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `<span>${client} — To: ${e.to}${e.cc ? " | CC: " + e.cc : ""}</span>
+      <button onclick="removeEmail('${client.replace(/'/g,"\\'")}')">Remove</button>`;
+    box.appendChild(div);
+  });
+}
+
+function removeEmail(client) {
+  delete CONFIG.emails[client];
+  renderEmailListItems();
+  syncConfigToBackend();
+}
+
+async function syncConfigToBackend() {
+  if (!API_URL || API_URL.indexOf("PASTE_YOUR") !== -1) return;
+  try {
+    await fetch(API_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({ action: "saveConfig", config: CONFIG })
+    });
+  } catch(e) { console.warn("Config sync failed", e); }
+}
+
+/* ============================================================
+   MANIFEST GENERATION
+   ============================================================ */
+function code3(str) {
+  return str.replace(/[^A-Za-z]/g,"").toUpperCase().slice(0,3).padEnd(3,"X");
+}
+
+function generateManifestNumber(client, courier) {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,"0");
+  const mm = String(now.getMonth()+1).padStart(2,"0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const hh = String(now.getHours()).padStart(2,"0");
+  const mi = String(now.getMinutes()).padStart(2,"0");
+  const ss = String(now.getSeconds()).padStart(2,"0");
+  return `RET-${code3(client)}-${code3(courier)}-${dd}${mm}${yy}-${hh}${mi}${ss}`;
+}
+
+/* ============================================================
+   START SCAN SESSION FOR A COURIER
+   ============================================================ */
+function startCourierScan() {
+  currentClient = document.getElementById("clientSelect").value;
+  currentCourier = document.getElementById("courierSelect").value;
+  if (!currentClient || !currentCourier) { showToast("Select client and courier", true); return; }
+
+  currentManifest = generateManifestNumber(currentClient, currentCourier);
+  scanRows = [];
+
+  document.getElementById("manifestNoDisplay").textContent = currentManifest;
+  document.getElementById("clientCourierDisplay").textContent = currentClient + " / " + currentCourier;
+  renderScanTable();
+
+  document.getElementById("selectCard").classList.add("hidden");
+  document.getElementById("scanCard").classList.remove("hidden");
+  document.getElementById("summaryCard").classList.add("hidden");
+  setTimeout(() => document.getElementById("awbInput").focus(), 100);
+}
+
+/* ============================================================
+   SCANNING
+   ============================================================ */
+function handleScanKey(e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const input = document.getElementById("awbInput");
+    const awb = input.value.trim();
+    if (!awb) return;
+    if (scanRows.some(r => r.awb === awb)) {
+      showToast("⚠️ Duplicate AWB in this manifest: " + awb, true);
+      input.value = "";
+      return;
+    }
+    const time = new Date().toLocaleString();
+    scanRows.push({ awb, time });
+    input.value = "";
+    renderScanTable();
+  }
+}
+
+function renderScanTable() {
+  const body = document.getElementById("scanTableBody");
+  body.innerHTML = "";
+  scanRows.forEach((r, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${i+1}</td><td>${r.awb}</td><td>${r.time}</td>
+      <td><button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="removeRow(${i})">✕</button></td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById("scanCount").textContent = scanRows.length;
+}
+
+function removeRow(i) {
+  scanRows.splice(i,1);
+  renderScanTable();
+}
+
+/* ============================================================
+   FINISH COURIER — save + branch (new courier vs full close)
+   ============================================================ */
+async function finishCourier(mode) {
+  if (scanRows.length === 0) {
+    showToast("No AWBs scanned yet", true);
+    return;
+  }
+  const payload = {
+    action: "saveScans",
+    manifest: currentManifest,
+    client: currentClient,
+    courier: currentCourier,
+    scanner: currentScanner,
+    rows: scanRows.map(r => ({
+      scanDate: r.time,
+      client: currentClient,
+      awb: r.awb,
+      courier: currentCourier,
+      scanner: currentScanner
+    }))
+  };
+
+  await saveToBackend(payload);
+
+  scanRows.forEach(r => {
+    sessionAllRows.push({
+      scanDate: r.time,
+      client: currentClient,
+      awb: r.awb,
+      courier: currentCourier,
+      scanner: currentScanner
+    });
+  });
+
+  sessionLog.push({
+    manifest: currentManifest,
+    client: currentClient,
+    courier: currentCourier,
+    count: scanRows.length
+  });
+
+  showToast(`✅ Saved ${scanRows.length} AWBs for ${currentCourier} (${currentManifest})`);
+
+  if (mode === "new") {
+    document.getElementById("scanCard").classList.add("hidden");
+    document.getElementById("selectCard").classList.remove("hidden");
+  } else {
+    showSessionSummary();
+  }
+}
+
+/* ============================================================
+   FINAL SUBMIT — send courier-wise summary mail to each client
+   ============================================================ */
+async function sendMailButtonClick() {
+  const btn = document.getElementById("sendMailBtn");
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = "Sending...";
+  await sendSessionMail();
+  btn.disabled = false;
+  btn.textContent = originalText;
+}
+
+async function sendSessionMail() {
+  if (!sessionLog.length) return;
+
+  // group by client
+  const byClient = {};
+  sessionLog.forEach(s => {
+    if (!byClient[s.client]) byClient[s.client] = [];
+    byClient[s.client].push({ courier: s.courier, manifest: s.manifest, count: s.count });
+  });
+
+  // per-client grand total
+  const clientTotals = {};
+  Object.keys(byClient).forEach(client => {
+    clientTotals[client] = byClient[client].reduce((sum, i) => sum + i.count, 0);
+  });
+
+  // Scanner + Courier-wise summary (same aggregation shown on the Session Summary screen)
+  const courierSummary = [];
+  const courierMap = {};
+  sessionAllRows.forEach(r => {
+    const key = r.scanner + "||" + r.courier;
+    courierMap[key] = (courierMap[key] || 0) + 1;
+  });
+  Object.keys(courierMap).sort().forEach(key => {
+    const [scanner, courier] = key.split("||");
+    courierSummary.push({ scanner, courier, total: courierMap[key] });
+  });
+
+  // Client-wise total (same aggregation shown on the Session Summary screen)
+  const clientSummary = [];
+  const clientMap = {};
+  sessionAllRows.forEach(r => { clientMap[r.client] = (clientMap[r.client] || 0) + 1; });
+  Object.keys(clientMap).sort().forEach(client => {
+    clientSummary.push({ client, total: clientMap[client] });
+  });
+
+  // Session close date — used to build the email subject
+  const closeDate = new Date();
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const sessionDate = String(closeDate.getDate()).padStart(2,"0") + "-" + months[closeDate.getMonth()] + "-" + closeDate.getFullYear();
+
+  const payload = {
+    action: "sendSessionMail",
+    scanner: currentScanner,
+    clients: byClient,
+    clientTotals: clientTotals,
+    courierSummary: courierSummary,
+    clientSummary: clientSummary,
+    sessionDate: sessionDate,
+    csvContent: buildSessionCSV(),
+    csvFileName: `scan-report-${sessionDate}.csv`
+  };
+
+  if (!API_URL || API_URL.indexOf("PASTE_YOUR") !== -1) {
+    console.log("[DEMO MODE — backend not configured] Would send mail:", payload);
+    return;
+  }
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.sentTo && data.sentTo.length) {
+      showToast(`📧 Mail sent to: ${data.sentTo.join(", ")}`);
+    }
+    if (data.skipped && data.skipped.length) {
+      showToast(`⚠️ No email found for: ${data.skipped.join(", ")}`, true);
+    }
+    if ((!data.sentTo || !data.sentTo.length) && (!data.skipped || !data.skipped.length)) {
+      showToast("📧 Summary mail sent to client(s)");
+    }
+  } catch (e) {
+    showToast("⚠️ Mail send failed — check connection", true);
+    console.error(e);
+  }
+}
+
+async function saveToBackend(payload) {
+  if (!API_URL || API_URL.indexOf("PASTE_YOUR") !== -1) {
+    console.log("[DEMO MODE — backend not configured] Would save:", payload);
+    return;
+  }
+  try {
+    await fetch(API_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    showToast("⚠️ Save failed — check connection", true);
+    console.error(e);
+  }
+}
+
+/* ============================================================
+   SESSION SUMMARY / RESET
+   ============================================================ */
+function showSessionSummary() {
+  document.getElementById("scanCard").classList.add("hidden");
+  document.getElementById("summaryCard").classList.remove("hidden");
+  const box = document.getElementById("summaryList");
+  box.innerHTML = "";
+  let total = 0;
+  sessionLog.forEach(s => {
+    total += s.count;
+    const div = document.createElement("div");
+    div.className = "summary-item";
+    div.innerHTML = `<span>${s.client} — ${s.courier} <span class="badge">${s.manifest}</span></span><strong>${s.count} AWB</strong>`;
+    box.appendChild(div);
+  });
+  const totalDiv = document.createElement("div");
+  totalDiv.className = "summary-item";
+  totalDiv.innerHTML = `<strong>Total</strong><strong>${total} AWB</strong>`;
+  box.appendChild(totalDiv);
+
+  renderCourierSummaryTable();
+  renderClientSummaryTable();
+}
+
+// Scanner + Courier wise counts, aggregated across this session's scans
+function renderCourierSummaryTable() {
+  const body = document.getElementById("courierSummaryBody");
+  body.innerHTML = "";
+  const map = {};
+  sessionAllRows.forEach(r => {
+    const key = r.scanner + "||" + r.courier;
+    map[key] = (map[key] || 0) + 1;
+  });
+  Object.keys(map).sort().forEach(key => {
+    const [scanner, courier] = key.split("||");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${scanner}</td><td>${courier}</td><td>${map[key]}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+// Client-wise total AWB count, aggregated across this session's scans
+function renderClientSummaryTable() {
+  const body = document.getElementById("clientSummaryBody");
+  body.innerHTML = "";
+  const map = {};
+  sessionAllRows.forEach(r => {
+    map[r.client] = (map[r.client] || 0) + 1;
+  });
+  Object.keys(map).sort().forEach(client => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${client}</td><td>${map[client]}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   DOWNLOAD SESSION REPORT AS CSV
+   ============================================================ */
+function csvEscape(val) {
+  val = String(val == null ? "" : val);
+  if (/[",\n]/.test(val)) val = '"' + val.replace(/"/g, '""') + '"';
+  return val;
+}
+
+// Builds the full session CSV (detailed rows + both summary tables + grand total).
+// Used by both the Download button and the mail attachment, so they always match.
+function buildSessionCSV() {
+  const rows = [["Scan Date", "Client Name", "AWB", "Courier", "Scanner Name"]];
+  sessionAllRows.forEach(r => rows.push([r.scanDate, r.client, r.awb, r.courier, r.scanner]));
+
+  const courierMap = {};
+  sessionAllRows.forEach(r => {
+    const key = r.scanner + "||" + r.courier;
+    courierMap[key] = (courierMap[key] || 0) + 1;
+  });
+  rows.push([]);
+  rows.push(["Scanner + Courier-wise Summary"]);
+  rows.push(["Scanner", "Courier", "Total AWB"]);
+  Object.keys(courierMap).sort().forEach(key => {
+    const [scanner, courier] = key.split("||");
+    rows.push([scanner, courier, courierMap[key]]);
+  });
+
+  const clientMap = {};
+  sessionAllRows.forEach(r => { clientMap[r.client] = (clientMap[r.client] || 0) + 1; });
+  rows.push([]);
+  rows.push(["Client-wise Total"]);
+  rows.push(["Client", "Total AWB"]);
+  Object.keys(clientMap).sort().forEach(client => rows.push([client, clientMap[client]]));
+
+  rows.push([]);
+  rows.push(["Grand Total", sessionAllRows.length]);
+
+  return rows.map(r => r.map(csvEscape).join(",")).join("\n");
+}
+
+function downloadSessionCSV() {
+  if (!sessionAllRows.length) {
+    showToast("No scan data in this session", true);
+    return;
+  }
+  const csv = buildSessionCSV();
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  a.href = url;
+  a.download = `scan-report-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function resetToClientSelect() {
+  sessionLog = [];
+  sessionAllRows = [];
+  document.getElementById("summaryCard").classList.add("hidden");
+  document.getElementById("selectCard").classList.remove("hidden");
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+function showToast(msg, isError) {
+  const box = document.getElementById("toastBox");
+  const t = document.createElement("div");
+  t.className = "toast" + (isError ? " error" : "");
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+</script>
+</body>
+</html>
