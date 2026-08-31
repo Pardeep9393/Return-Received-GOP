@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -232,7 +232,21 @@
   <div class="card hidden" id="summaryCard">
     <h2>Session Summary</h2>
     <div id="summaryList"></div>
+
+    <h2 style="margin-top:24px;">Scanner + Courier-wise Summary</h2>
+    <table>
+      <thead><tr><th>Scanner</th><th>Courier</th><th>Total AWB</th></tr></thead>
+      <tbody id="courierSummaryBody"></tbody>
+    </table>
+
+    <h2 style="margin-top:24px;">Client-wise Total</h2>
+    <table>
+      <thead><tr><th>Client</th><th>Total AWB</th></tr></thead>
+      <tbody id="clientSummaryBody"></tbody>
+    </table>
+
     <div class="actions">
+      <button class="btn btn-outline" onclick="downloadSessionCSV()">⬇️ Download Report (CSV)</button>
       <button class="btn btn-primary" onclick="resetToClientSelect()">Start New Session</button>
     </div>
   </div>
@@ -267,6 +281,7 @@ let currentCourier = "";
 let currentManifest = "";
 let scanRows = []; // {awb, time}
 let sessionLog = []; // finished couriers this session: {manifest, client, courier, count}
+let sessionAllRows = []; // every scanned row this session: {scanDate, client, courier, scanner, awb} — used for summary + CSV download
 
 /* ============================================================
    INIT — load config (local fallback if API not set yet)
@@ -901,6 +916,7 @@ async function finishCourier(mode) {
     scanner: currentScanner,
     rows: scanRows.map(r => ({
       scanDate: r.time,
+      client: currentClient,
       awb: r.awb,
       courier: currentCourier,
       scanner: currentScanner
@@ -908,6 +924,16 @@ async function finishCourier(mode) {
   };
 
   await saveToBackend(payload);
+
+  scanRows.forEach(r => {
+    sessionAllRows.push({
+      scanDate: r.time,
+      client: currentClient,
+      awb: r.awb,
+      courier: currentCourier,
+      scanner: currentScanner
+    });
+  });
 
   sessionLog.push({
     manifest: currentManifest,
@@ -940,7 +966,18 @@ async function sendSessionMail() {
     byClient[s.client].push({ courier: s.courier, manifest: s.manifest, count: s.count });
   });
 
-  const payload = { action: "sendSessionMail", scanner: currentScanner, clients: byClient };
+  // per-client grand total
+  const clientTotals = {};
+  Object.keys(byClient).forEach(client => {
+    clientTotals[client] = byClient[client].reduce((sum, i) => sum + i.count, 0);
+  });
+
+  const payload = {
+    action: "sendSessionMail",
+    scanner: currentScanner,
+    clients: byClient,
+    clientTotals: clientTotals
+  };
 
   if (!API_URL || API_URL.indexOf("PASTE_YOUR") !== -1) {
     console.log("[DEMO MODE — backend not configured] Would send mail:", payload);
@@ -996,10 +1033,100 @@ function showSessionSummary() {
   totalDiv.className = "summary-item";
   totalDiv.innerHTML = `<strong>Total</strong><strong>${total} AWB</strong>`;
   box.appendChild(totalDiv);
+
+  renderCourierSummaryTable();
+  renderClientSummaryTable();
+}
+
+// Scanner + Courier wise counts, aggregated across this session's scans
+function renderCourierSummaryTable() {
+  const body = document.getElementById("courierSummaryBody");
+  body.innerHTML = "";
+  const map = {};
+  sessionAllRows.forEach(r => {
+    const key = r.scanner + "||" + r.courier;
+    map[key] = (map[key] || 0) + 1;
+  });
+  Object.keys(map).sort().forEach(key => {
+    const [scanner, courier] = key.split("||");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${scanner}</td><td>${courier}</td><td>${map[key]}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+// Client-wise total AWB count, aggregated across this session's scans
+function renderClientSummaryTable() {
+  const body = document.getElementById("clientSummaryBody");
+  body.innerHTML = "";
+  const map = {};
+  sessionAllRows.forEach(r => {
+    map[r.client] = (map[r.client] || 0) + 1;
+  });
+  Object.keys(map).sort().forEach(client => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${client}</td><td>${map[client]}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   DOWNLOAD SESSION REPORT AS CSV
+   ============================================================ */
+function csvEscape(val) {
+  val = String(val == null ? "" : val);
+  if (/[",\n]/.test(val)) val = '"' + val.replace(/"/g, '""') + '"';
+  return val;
+}
+
+function downloadSessionCSV() {
+  if (!sessionAllRows.length) {
+    showToast("No scan data in this session", true);
+    return;
+  }
+
+  const rows = [["Scan Date", "Client Name", "AWB", "Courier", "Scanner Name"]];
+  sessionAllRows.forEach(r => rows.push([r.scanDate, r.client, r.awb, r.courier, r.scanner]));
+
+  const courierMap = {};
+  sessionAllRows.forEach(r => {
+    const key = r.scanner + "||" + r.courier;
+    courierMap[key] = (courierMap[key] || 0) + 1;
+  });
+  rows.push([]);
+  rows.push(["Scanner + Courier-wise Summary"]);
+  rows.push(["Scanner", "Courier", "Total AWB"]);
+  Object.keys(courierMap).sort().forEach(key => {
+    const [scanner, courier] = key.split("||");
+    rows.push([scanner, courier, courierMap[key]]);
+  });
+
+  const clientMap = {};
+  sessionAllRows.forEach(r => { clientMap[r.client] = (clientMap[r.client] || 0) + 1; });
+  rows.push([]);
+  rows.push(["Client-wise Total"]);
+  rows.push(["Client", "Total AWB"]);
+  Object.keys(clientMap).sort().forEach(client => rows.push([client, clientMap[client]]));
+
+  rows.push([]);
+  rows.push(["Grand Total", sessionAllRows.length]);
+
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  a.href = url;
+  a.download = `scan-report-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function resetToClientSelect() {
   sessionLog = [];
+  sessionAllRows = [];
   document.getElementById("summaryCard").classList.add("hidden");
   document.getElementById("selectCard").classList.remove("hidden");
 }
