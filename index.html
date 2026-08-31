@@ -246,6 +246,7 @@
     </table>
 
     <div class="actions">
+      <button class="btn btn-success" onclick="sendMailButtonClick()" id="sendMailBtn">📧 Send Mail</button>
       <button class="btn btn-outline" onclick="downloadSessionCSV()">⬇️ Download Report (CSV)</button>
       <button class="btn btn-primary" onclick="resetToClientSelect()">Start New Session</button>
     </div>
@@ -948,7 +949,6 @@ async function finishCourier(mode) {
     document.getElementById("scanCard").classList.add("hidden");
     document.getElementById("selectCard").classList.remove("hidden");
   } else {
-    await sendSessionMail();
     showSessionSummary();
   }
 }
@@ -956,6 +956,16 @@ async function finishCourier(mode) {
 /* ============================================================
    FINAL SUBMIT — send courier-wise summary mail to each client
    ============================================================ */
+async function sendMailButtonClick() {
+  const btn = document.getElementById("sendMailBtn");
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = "Sending...";
+  await sendSessionMail();
+  btn.disabled = false;
+  btn.textContent = originalText;
+}
+
 async function sendSessionMail() {
   if (!sessionLog.length) return;
 
@@ -1014,12 +1024,21 @@ async function sendSessionMail() {
     return;
   }
   try {
-    await fetch(API_URL, {
+    const res = await fetch(API_URL, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify(payload)
     });
-    showToast("📧 Summary mail sent to client(s)");
+    const data = await res.json();
+    if (data.sentTo && data.sentTo.length) {
+      showToast(`📧 Mail sent to: ${data.sentTo.join(", ")}`);
+    }
+    if (data.skipped && data.skipped.length) {
+      showToast(`⚠️ No email found for: ${data.skipped.join(", ")}`, true);
+    }
+    if ((!data.sentTo || !data.sentTo.length) && (!data.skipped || !data.skipped.length)) {
+      showToast("📧 Summary mail sent to client(s)");
+    }
   } catch (e) {
     showToast("⚠️ Mail send failed — check connection", true);
     console.error(e);
