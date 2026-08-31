@@ -972,11 +972,41 @@ async function sendSessionMail() {
     clientTotals[client] = byClient[client].reduce((sum, i) => sum + i.count, 0);
   });
 
+  // Scanner + Courier-wise summary (same aggregation shown on the Session Summary screen)
+  const courierSummary = [];
+  const courierMap = {};
+  sessionAllRows.forEach(r => {
+    const key = r.scanner + "||" + r.courier;
+    courierMap[key] = (courierMap[key] || 0) + 1;
+  });
+  Object.keys(courierMap).sort().forEach(key => {
+    const [scanner, courier] = key.split("||");
+    courierSummary.push({ scanner, courier, total: courierMap[key] });
+  });
+
+  // Client-wise total (same aggregation shown on the Session Summary screen)
+  const clientSummary = [];
+  const clientMap = {};
+  sessionAllRows.forEach(r => { clientMap[r.client] = (clientMap[r.client] || 0) + 1; });
+  Object.keys(clientMap).sort().forEach(client => {
+    clientSummary.push({ client, total: clientMap[client] });
+  });
+
+  // Session close date — used to build the email subject
+  const closeDate = new Date();
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const sessionDate = String(closeDate.getDate()).padStart(2,"0") + "-" + months[closeDate.getMonth()] + "-" + closeDate.getFullYear();
+
   const payload = {
     action: "sendSessionMail",
     scanner: currentScanner,
     clients: byClient,
-    clientTotals: clientTotals
+    clientTotals: clientTotals,
+    courierSummary: courierSummary,
+    clientSummary: clientSummary,
+    sessionDate: sessionDate,
+    csvContent: buildSessionCSV(),
+    csvFileName: `scan-report-${sessionDate}.csv`
   };
 
   if (!API_URL || API_URL.indexOf("PASTE_YOUR") !== -1) {
@@ -1079,12 +1109,9 @@ function csvEscape(val) {
   return val;
 }
 
-function downloadSessionCSV() {
-  if (!sessionAllRows.length) {
-    showToast("No scan data in this session", true);
-    return;
-  }
-
+// Builds the full session CSV (detailed rows + both summary tables + grand total).
+// Used by both the Download button and the mail attachment, so they always match.
+function buildSessionCSV() {
   const rows = [["Scan Date", "Client Name", "AWB", "Courier", "Scanner Name"]];
   sessionAllRows.forEach(r => rows.push([r.scanDate, r.client, r.awb, r.courier, r.scanner]));
 
@@ -1111,7 +1138,15 @@ function downloadSessionCSV() {
   rows.push([]);
   rows.push(["Grand Total", sessionAllRows.length]);
 
-  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  return rows.map(r => r.map(csvEscape).join(",")).join("\n");
+}
+
+function downloadSessionCSV() {
+  if (!sessionAllRows.length) {
+    showToast("No scan data in this session", true);
+    return;
+  }
+  const csv = buildSessionCSV();
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
