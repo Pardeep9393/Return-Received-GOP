@@ -128,9 +128,18 @@
 
       <!-- TAB: Add Courier -->
       <div id="manageTabCouriers" class="hidden">
+        <label for="courierClientSelect">Client</label>
+        <select id="courierClientSelect" onchange="renderCourierListForClient()"></select>
+
+        <label for="existingCourierSelect" style="margin-top:14px;">Pick from already-uploaded couriers</label>
         <div class="row">
-          <select id="courierClientSelect" onchange="renderCourierListForClient()"></select>
-          <input type="text" id="newCourierName" placeholder="Courier name for selected client">
+          <select id="existingCourierSelect"></select>
+          <button class="btn btn-outline" onclick="assignExistingCourier()">Assign to Client</button>
+        </div>
+
+        <label for="newCourierName">Or add a brand-new courier name</label>
+        <div class="row">
+          <input type="text" id="newCourierName" placeholder="New courier name">
           <button class="btn btn-outline" onclick="addCourierOnly()">Add Courier</button>
         </div>
         <div id="courierListItems" style="margin-top:10px;"></div>
@@ -400,6 +409,51 @@ function renderCourierClientDropdown() {
   });
   if (Object.keys(CONFIG.clients).includes(prev)) sel.value = prev;
   renderCourierListForClient();
+  renderExistingCourierDropdown();
+}
+
+// Global master list — every unique courier name seen across all clients
+// (added manually, via bulk courier upload, or bulk client-courier import).
+function getCourierMasterList() {
+  const set = new Set();
+  Object.values(CONFIG.clients).forEach(list => list.forEach(c => set.add(c)));
+  return Array.from(set).sort((a,b) => a.localeCompare(b));
+}
+
+function renderExistingCourierDropdown() {
+  const sel = document.getElementById("existingCourierSelect");
+  if (!sel) return;
+  const master = getCourierMasterList();
+  const prev = sel.value;
+  sel.innerHTML = "";
+  if (!master.length) {
+    const opt = document.createElement("option");
+    opt.value = ""; opt.textContent = "No couriers uploaded yet";
+    sel.appendChild(opt);
+    return;
+  }
+  master.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  if (master.includes(prev)) sel.value = prev;
+}
+
+function assignExistingCourier() {
+  const client = document.getElementById("courierClientSelect").value;
+  const courier = document.getElementById("existingCourierSelect").value;
+  if (!client) { showToast("Add a client first (Add Client tab)", true); return; }
+  if (!courier) { showToast("No courier selected", true); return; }
+  if (!CONFIG.clients[client].includes(courier)) {
+    CONFIG.clients[client].push(courier);
+    renderClientDropdown();
+    renderCourierListForClient();
+    showToast(`Assigned "${courier}" to ${client}`);
+    syncConfigToBackend();
+  } else {
+    showToast(courier + " is already assigned to " + client, true);
+  }
 }
 
 function addCourierOnly() {
@@ -411,6 +465,7 @@ function addCourierOnly() {
   document.getElementById("newCourierName").value = "";
   renderClientDropdown();
   renderCourierListForClient();
+  renderExistingCourierDropdown();
   showToast("Courier added to " + client + ": " + courier);
   syncConfigToBackend();
 }
@@ -432,8 +487,10 @@ function removeCourier(client, courier) {
   CONFIG.clients[client] = CONFIG.clients[client].filter(c => c !== courier);
   renderClientDropdown();
   renderCourierListForClient();
+  renderExistingCourierDropdown();
   syncConfigToBackend();
 }
+
 
 /* ---- BULK UPLOAD: Client + Courier ---- */
 function readFileAsRows(file, callback) {
