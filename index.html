@@ -103,7 +103,7 @@
     <div class="row">
       <div>
         <label for="clientSelect">Client Name</label>
-        <select id="clientSelect" onchange="onClientChange()"></select>
+        <select id="clientSelect"></select>
       </div>
       <div>
         <label for="courierSelect">Courier Name</label>
@@ -398,19 +398,22 @@ function renderClientDropdown() {
     opt.value = c; opt.textContent = c;
     sel.appendChild(opt);
   });
-  onClientChange();
+  renderCourierSelectDropdown();
   renderManageTabs();
 }
 
-function onClientChange() {
-  const client = document.getElementById("clientSelect").value;
+// Courier dropdown is independent of Client — always shows the full master
+// list of couriers (unique, across all clients), not filtered by client.
+function renderCourierSelectDropdown() {
   const courierSel = document.getElementById("courierSelect");
+  const prev = courierSel.value;
   courierSel.innerHTML = "";
-  (CONFIG.clients[client] || []).forEach(cr => {
+  getCourierMasterList().forEach(cr => {
     const opt = document.createElement("option");
     opt.value = cr; opt.textContent = cr;
     courierSel.appendChild(opt);
   });
+  if (getCourierMasterList().includes(prev)) courierSel.value = prev;
 }
 
 function toggleManage() {
