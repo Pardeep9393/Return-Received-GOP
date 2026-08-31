@@ -90,6 +90,11 @@
     <div class="actions">
       <button class="btn btn-primary" onclick="doLogin()">Login</button>
     </div>
+    <span class="manage-toggle" onclick="toggleAddScanner()">+ Add new scanner name</span>
+    <div class="row hidden" id="addScannerBox" style="margin-top:10px;">
+      <input type="text" id="newScannerName" placeholder="New scanner name">
+      <button class="btn btn-outline" onclick="addScannerOnly()">Add</button>
+    </div>
   </div>
 
   <!-- STEP 1: CLIENT + COURIER SELECT -->
@@ -107,6 +112,7 @@
     </div>
     <div class="actions">
       <button class="btn btn-primary" onclick="startCourierScan()">Start Scan</button>
+      <button class="btn btn-outline" onclick="refreshFromSheet()">🔄 Refresh List</button>
     </div>
     <span class="manage-toggle" onclick="toggleManage()">+ Manage Client / Courier / Email</span>
     <div class="manage-list hidden" id="manageBox">
@@ -243,6 +249,14 @@
 const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 
 /* ============================================================
+   CLIENT / COURIER MASTER SHEET (read-only source)
+   Column A = Client Name, Column D = Courier Name
+   Sheet must be shared as "Anyone with the link can view".
+   ============================================================ */
+const CLIENT_COURIER_SHEET_ID = "1Hgj7LvjkSGDMEDm8JxSWWG8bxm126T5MT6Z8kXvyNTM";
+const CLIENT_COURIER_SHEET_GID = "547577254";
+
+/* ============================================================
    STATE
    ============================================================ */
 let CONFIG = { scanners: [], clients: {}, emails: {} }; // clients: { clientName: [courier1, courier2] }; emails: { clientName: {to, cc} }
@@ -259,9 +273,49 @@ let sessionLog = []; // finished couriers this session: {manifest, client, couri
    ============================================================ */
 window.onload = async function() {
   await loadConfig();
+  await loadClientCourierFromSheet();
   renderLoginDropdown();
   renderClientDropdown();
 };
+
+/* ============================================================
+   LOAD CLIENT + COURIER LIST FROM GOOGLE SHEET (gviz API)
+   Column A -> client name, Column D -> courier name.
+   Merges into CONFIG.clients (does not remove manually-added ones).
+   ============================================================ */
+async function loadClientCourierFromSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${CLIENT_COURIER_SHEET_ID}/gviz/tq?tqx=out:json&gid=${CLIENT_COURIER_SHEET_GID}&range=A2:D`;
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const jsonStart = text.indexOf("{");
+    const jsonEnd = text.lastIndexOf("}");
+    const json = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+    const rows = (json.table && json.table.rows) || [];
+    let added = 0;
+    rows.forEach(r => {
+      const cells = r.c || [];
+      const client = cells[0] && cells[0].v != null ? String(cells[0].v).trim() : "";
+      const courier = cells[3] && cells[3].v != null ? String(cells[3].v).trim() : "";
+      if (!client || !courier) return;
+      if (!CONFIG.clients[client]) CONFIG.clients[client] = [];
+      if (!CONFIG.clients[client].includes(courier)) {
+        CONFIG.clients[client].push(courier);
+        added++;
+      }
+    });
+    if (added) console.log(`Synced ${added} client-courier pair(s) from sheet`);
+  } catch (e) {
+    console.warn("Could not load client/courier list from sheet", e);
+    showToast("⚠️ Could not load client/courier list from sheet", true);
+  }
+}
+
+async function refreshFromSheet() {
+  await loadClientCourierFromSheet();
+  renderClientDropdown();
+  showToast("🔄 Client/Courier list refreshed from sheet");
+}
 
 async function loadConfig() {
   const local = localStorageSafeGet();
@@ -303,6 +357,26 @@ function renderLoginDropdown() {
     opt.value = name; opt.textContent = name;
     sel.appendChild(opt);
   });
+}
+
+function toggleAddScanner() {
+  document.getElementById("addScannerBox").classList.toggle("hidden");
+}
+
+function addScannerOnly() {
+  const name = document.getElementById("newScannerName").value.trim();
+  if (!name) { showToast("Enter a scanner name", true); return; }
+  if (CONFIG.scanners.includes(name)) {
+    showToast(name + " already exists", true);
+    return;
+  }
+  CONFIG.scanners.push(name);
+  document.getElementById("newScannerName").value = "";
+  renderLoginDropdown();
+  document.getElementById("scannerSelect").value = name;
+  document.getElementById("addScannerBox").classList.add("hidden");
+  showToast("✅ Scanner added: " + name);
+  syncConfigToBackend();
 }
 
 function doLogin() {
