@@ -1095,6 +1095,14 @@ async function sendSessionMail() {
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const sessionDate = String(closeDate.getDate()).padStart(2,"0") + "-" + months[closeDate.getMonth()] + "-" + closeDate.getFullYear();
 
+  // Per-client CSV — each client's mail must only carry their own scan
+  // data, never the combined session data.
+  const rowsByClient = groupRowsByClient();
+  const csvByClient = {};
+  Object.keys(rowsByClient).forEach(client => {
+    csvByClient[client] = buildClientCSV(client, rowsByClient[client]);
+  });
+
   const payload = {
     action: "sendSessionMail",
     scanner: currentScanner,
@@ -1103,8 +1111,7 @@ async function sendSessionMail() {
     courierSummary: courierSummary,
     clientSummary: clientSummary,
     sessionDate: sessionDate,
-    csvContent: buildSessionCSV(),
-    csvFileName: `scan-report-${sessionDate}.csv`,
+    csvByClient: csvByClient,
     podFiles: podFilesByClient
   };
 
