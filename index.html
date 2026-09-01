@@ -248,6 +248,11 @@
       <tbody id="clientSummaryBody"></tbody>
     </table>
 
+    <h2 style="margin-top:24px;">Upload POD (optional)</h2>
+    <label for="podFileInput">Attach POD — PDF, JPG or JPEG (sent along with the summary mail)</label>
+    <input type="file" id="podFileInput" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" onchange="handlePodUpload(event)">
+    <div id="podFileStatus" style="font-size:13px;color:var(--muted);margin-top:8px;"></div>
+
     <div class="actions">
       <button class="btn btn-success" onclick="sendMailButtonClick()" id="sendMailBtn">📧 Send Mail</button>
       <button class="btn btn-outline" onclick="downloadSessionCSV()">⬇️ Download Report (CSV)</button>
@@ -294,6 +299,7 @@ let currentManifest = "";
 let scanRows = []; // {awb, time}
 let sessionLog = []; // finished couriers this session: {manifest, client, courier, count}
 let sessionAllRows = []; // every scanned row this session: {scanDate, client, courier, scanner, awb} — used for summary + CSV download
+let podFileData = null; // { name, mimeType, base64 } — uploaded POD attached to the summary mail
 
 /* ============================================================
    INIT — load config (local fallback if API not set yet)
@@ -1074,7 +1080,8 @@ async function sendSessionMail() {
     clientSummary: clientSummary,
     sessionDate: sessionDate,
     csvContent: buildSessionCSV(),
-    csvFileName: `scan-report-${sessionDate}.csv`
+    csvFileName: `scan-report-${sessionDate}.csv`,
+    podFile: podFileData
   };
 
   if (!API_URL || API_URL.indexOf("PASTE_YOUR") !== -1) {
@@ -1118,6 +1125,46 @@ async function saveToBackend(payload) {
     showToast("⚠️ Save failed — check connection", true);
     console.error(e);
   }
+}
+
+/* ============================================================
+   POD UPLOAD — reads the file as base64 so it can be sent to the
+   backend as a JSON attachment along with the summary mail.
+   ============================================================ */
+function handlePodUpload(event) {
+  const file = event.target.files[0];
+  const statusBox = document.getElementById("podFileStatus");
+  if (!file) {
+    podFileData = null;
+    statusBox.textContent = "";
+    return;
+  }
+  const allowedTypes = ["application/pdf", "image/jpeg", "image/jpg"];
+  const nameLower = file.name.toLowerCase();
+  const validExt = nameLower.endsWith(".pdf") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg");
+  if (!validExt && allowedTypes.indexOf(file.type) === -1) {
+    showToast("⚠️ Only PDF, JPG or JPEG files are allowed", true);
+    event.target.value = "";
+    podFileData = null;
+    statusBox.textContent = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function () {
+    const base64 = reader.result.split(",")[1];
+    podFileData = {
+      name: file.name,
+      mimeType: file.type || (nameLower.endsWith(".pdf") ? "application/pdf" : "image/jpeg"),
+      base64: base64
+    };
+    statusBox.textContent = `✅ ${file.name} ready — will be attached to the summary mail`;
+  };
+  reader.onerror = function () {
+    showToast("⚠️ Could not read POD file", true);
+    podFileData = null;
+    statusBox.textContent = "";
+  };
+  reader.readAsDataURL(file);
 }
 
 /* ============================================================
@@ -1239,6 +1286,11 @@ function downloadSessionCSV() {
 function resetToClientSelect() {
   sessionLog = [];
   sessionAllRows = [];
+  podFileData = null;
+  const podInput = document.getElementById("podFileInput");
+  if (podInput) podInput.value = "";
+  const podStatus = document.getElementById("podFileStatus");
+  if (podStatus) podStatus.textContent = "";
   document.getElementById("summaryCard").classList.add("hidden");
   document.getElementById("selectCard").classList.remove("hidden");
 }
