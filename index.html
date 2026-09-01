@@ -251,8 +251,21 @@
       <tbody id="clientSummaryBody"></tbody>
     </table>
 
-    <h2 style="margin-top:24px;">Upload POD (client-wise, optional)</h2>
-    <div id="podUploadList"></div>
+    <h2 style="margin-top:24px;">Upload POD (optional)</h2>
+    <div class="row">
+      <div>
+        <label for="podClientSelect">Client Name</label>
+        <select id="podClientSelect"></select>
+      </div>
+      <div>
+        <label for="podFileMultiInput">Upload POD file(s) — PDF, JPG or JPEG</label>
+        <input type="file" id="podFileMultiInput" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" multiple>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="addPodFilesForClient()">+ Add POD for this client</button>
+    </div>
+    <div id="podUploadedList" style="margin-top:14px;"></div>
 
     <div class="row" style="align-items:flex-end;">
       <div>
@@ -310,7 +323,7 @@ let currentManifest = "";
 let scanRows = []; // {awb, time}
 let sessionLog = []; // finished couriers this session: {manifest, client, courier, count}
 let sessionAllRows = []; // every scanned row this session: {scanDate, client, courier, scanner, awb} — used for summary + CSV download
-let podFilesByClient = {}; // { clientName: { name, mimeType, base64 } } — each client's POD is attached only to that client's mail
+let podFilesByClient = {}; // { clientName: [ { name, mimeType, base64 }, ... ] } — each client's PODs are attached only to that client's mail
 
 /* ============================================================
    INIT — load config (local fallback if API not set yet)
@@ -1139,64 +1152,106 @@ async function saveToBackend(payload) {
 }
 
 /* ============================================================
-   POD UPLOAD — one file per client. Each file is read as base64
-   so it can be sent to the backend and attached only to that
-   client's own summary mail.
+   POD UPLOAD — pick a client, then upload one or more POD files
+   (PDF/JPG/JPEG) for that client. Each client's files are kept
+   separate and later attached only to that client's summary mail.
    ============================================================ */
 function renderPodUploadInputs() {
-  const box = document.getElementById("podUploadList");
-  box.innerHTML = "";
+  const select = document.getElementById("podClientSelect");
   const clients = Object.keys(groupRowsByClient()).sort();
-  clients.forEach(client => {
-    const safeId = sanitizeFileName(client);
-    const row = document.createElement("div");
-    row.className = "row";
-    row.style.marginTop = "10px";
-    row.innerHTML = `
-      <div style="flex:2;">
-        <label>${client}</label>
-        <input type="file" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg"
-          onchange="handlePodUpload(event, '${client.replace(/'/g, "\\'")}')">
-        <div id="podStatus-${safeId}" style="font-size:12px;color:var(--muted);margin-top:6px;"></div>
-      </div>`;
-    box.appendChild(row);
+  select.innerHTML = clients.map(c => `<option value="${c.replace(/"/g, "&quot;")}">${c}</option>`).join("");
+  renderPodUploadedList();
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 }
 
-function handlePodUpload(event, client) {
-  const file = event.target.files[0];
-  const statusBox = document.getElementById(`podStatus-${sanitizeFileName(client)}`);
-  if (!file) {
-    delete podFilesByClient[client];
-    if (statusBox) statusBox.textContent = "";
+async function addPodFilesForClient() {
+  const client = document.getElementById("podClientSelect").value;
+  const input = document.getElementById("podFileMultiInput");
+  const files = Array.from(input.files || []);
+  if (!client) {
+    showToast("⚠️ No client available to attach POD to", true);
+    return;
+  }
+  if (!files.length) {
+    showToast("⚠️ Choose at least one file first", true);
     return;
   }
   const allowedTypes = ["application/pdf", "image/jpeg", "image/jpg"];
-  const nameLower = file.name.toLowerCase();
-  const validExt = nameLower.endsWith(".pdf") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg");
-  if (!validExt && allowedTypes.indexOf(file.type) === -1) {
-    showToast("⚠️ Only PDF, JPG or JPEG files are allowed", true);
-    event.target.value = "";
-    delete podFilesByClient[client];
-    if (statusBox) statusBox.textContent = "";
+  const validFiles = [];
+  for (const file of files) {
+    const nameLower = file.name.toLowerCase();
+    const validExt = nameLower.endsWith(".pdf") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg");
+    if (!validExt && allowedTypes.indexOf(file.type) === -1) {
+      showToast(`⚠️ Skipped "${file.name}" — only PDF, JPG or JPEG allowed`, true);
+      continue;
+    }
+    validFiles.push(file);
+  }
+  if (!validFiles.length) {
+    input.value = "";
     return;
   }
-  const reader = new FileReader();
-  reader.onload = function () {
-    const base64 = reader.result.split(",")[1];
-    podFilesByClient[client] = {
+
+  if (!podFilesByClient[client]) podFilesByClient[client] = [];
+  for (const file of validFiles) {
+    const base64 = await fileToBase64(file);
+    const nameLower = file.name.toLowerCase();
+    podFilesByClient[client].push({
       name: file.name,
       mimeType: file.type || (nameLower.endsWith(".pdf") ? "application/pdf" : "image/jpeg"),
       base64: base64
-    };
-    if (statusBox) statusBox.textContent = `✅ ${file.name} ready — will be sent to ${client} only`;
-  };
-  reader.onerror = function () {
-    showToast("⚠️ Could not read POD file", true);
-    delete podFilesByClient[client];
-    if (statusBox) statusBox.textContent = "";
-  };
-  reader.readAsDataURL(file);
+    });
+  }
+
+  input.value = "";
+  renderPodUploadedList();
+  showToast(`✅ ${validFiles.length} file(s) added for ${client}`);
+}
+
+function removePodFile(client, index) {
+  if (!podFilesByClient[client]) return;
+  podFilesByClient[client].splice(index, 1);
+  if (!podFilesByClient[client].length) delete podFilesByClient[client];
+  renderPodUploadedList();
+}
+
+function renderPodUploadedList() {
+  const box = document.getElementById("podUploadedList");
+  box.innerHTML = "";
+  const clients = Object.keys(podFilesByClient).sort();
+  if (!clients.length) {
+    box.innerHTML = `<div style="font-size:13px;color:var(--muted);">No POD files added yet.</div>`;
+    return;
+  }
+  clients.forEach(client => {
+    const group = document.createElement("div");
+    group.style.marginBottom = "10px";
+    const title = document.createElement("div");
+    title.style.fontSize = "13px";
+    title.style.color = "var(--muted)";
+    title.style.marginBottom = "4px";
+    title.textContent = client;
+    group.appendChild(title);
+    podFilesByClient[client].forEach((f, i) => {
+      const item = document.createElement("div");
+      item.className = "manage-list item";
+      item.innerHTML = `<span>📎 ${f.name}</span>`;
+      const btn = document.createElement("button");
+      btn.textContent = "✕";
+      btn.onclick = () => removePodFile(client, i);
+      item.appendChild(btn);
+      group.appendChild(item);
+    });
+    box.appendChild(group);
+  });
 }
 
 /* ============================================================
@@ -1415,8 +1470,10 @@ function resetToClientSelect() {
   sessionLog = [];
   sessionAllRows = [];
   podFilesByClient = {};
-  const podList = document.getElementById("podUploadList");
+  const podList = document.getElementById("podUploadedList");
   if (podList) podList.innerHTML = "";
+  const podFileInput = document.getElementById("podFileMultiInput");
+  if (podFileInput) podFileInput.value = "";
   document.getElementById("summaryCard").classList.add("hidden");
   document.getElementById("selectCard").classList.remove("hidden");
 }
