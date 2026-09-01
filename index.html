@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Return Received Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --bg:#0f172a; --card:#1e293b; --card2:#111827; --accent:#3b82f6; --accent2:#22c55e;
@@ -253,9 +256,19 @@
     <input type="file" id="podFileInput" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" onchange="handlePodUpload(event)">
     <div id="podFileStatus" style="font-size:13px;color:var(--muted);margin-top:8px;"></div>
 
+    <div class="row" style="align-items:flex-end;">
+      <div>
+        <label for="downloadFormatSelect">Download format</label>
+        <select id="downloadFormatSelect">
+          <option value="csv">CSV</option>
+          <option value="pdf">PDF</option>
+        </select>
+      </div>
+      <button class="btn btn-outline" onclick="downloadClientWiseReports()" style="align-self:flex-end;">⬇️ Download Report (Client-wise)</button>
+    </div>
+
     <div class="actions">
       <button class="btn btn-success" onclick="sendMailButtonClick()" id="sendMailBtn">📧 Send Mail</button>
-      <button class="btn btn-outline" onclick="downloadSessionCSV()">⬇️ Download Report (CSV)</button>
       <button class="btn btn-primary" onclick="resetToClientSelect()">Start New Session</button>
     </div>
   </div>
@@ -1265,22 +1278,117 @@ function buildSessionCSV() {
   return rows.map(r => r.map(csvEscape).join(",")).join("\n");
 }
 
-function downloadSessionCSV() {
-  if (!sessionAllRows.length) {
-    showToast("No scan data in this session", true);
-    return;
-  }
-  const csv = buildSessionCSV();
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+/* ============================================================
+   CLIENT-WISE DOWNLOAD — builds one CSV or PDF per client
+   (never a single file combining every client's data), and
+   bundles them into a single ZIP if there's more than one client.
+   ============================================================ */
+function sanitizeFileName(name) {
+  return String(name || "client").trim().replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "client";
+}
+
+function groupRowsByClient() {
+  const map = {};
+  sessionAllRows.forEach(r => {
+    if (!map[r.client]) map[r.client] = [];
+    map[r.client].push(r);
+  });
+  return map;
+}
+
+function buildClientCSV(client, rows) {
+  const out = [["Scan Date", "Client Name", "AWB", "Courier", "Scanner Name", "Status"]];
+  rows.forEach(r => out.push([r.scanDate, r.client, r.awb, r.courier, r.scanner, r.status || "Good"]));
+
+  const courierMap = {};
+  rows.forEach(r => { courierMap[r.courier] = (courierMap[r.courier] || 0) + 1; });
+  out.push([]);
+  out.push(["Courier-wise Summary"]);
+  out.push(["Courier", "Total AWB"]);
+  Object.keys(courierMap).sort().forEach(c => out.push([c, courierMap[c]]));
+
+  out.push([]);
+  out.push(["Total", rows.length]);
+
+  return out.map(r => r.map(csvEscape).join(",")).join("\n");
+}
+
+function buildClientPDFBlob(client, rows) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(14);
+  doc.text(`Return Received Report — ${client}`, 14, 16);
+  doc.setFontSize(10);
+  doc.text(`Total AWB: ${rows.length}`, 14, 23);
+
+  doc.autoTable({
+    startY: 28,
+    head: [["Scan Date", "AWB", "Courier", "Scanner", "Status"]],
+    body: rows.map(r => [r.scanDate, r.awb, r.courier, r.scanner, r.status || "Good"]),
+    styles: { fontSize: 8 }
+  });
+
+  const courierMap = {};
+  rows.forEach(r => { courierMap[r.courier] = (courierMap[r.courier] || 0) + 1; });
+  const summaryRows = Object.keys(courierMap).sort().map(c => [c, String(courierMap[c])]);
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 10,
+    head: [["Courier", "Total AWB"]],
+    body: summaryRows,
+    styles: { fontSize: 9 }
+  });
+
+  return doc.output("blob");
+}
+
+function triggerBlobDownload(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   a.href = url;
-  a.download = `scan-report-${stamp}.csv`;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+async function downloadClientWiseReports() {
+  if (!sessionAllRows.length) {
+    showToast("No scan data in this session", true);
+    return;
+  }
+  const format = document.getElementById("downloadFormatSelect").value;
+  const byClient = groupRowsByClient();
+  const clients = Object.keys(byClient).sort();
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+
+  if (clients.length === 1) {
+    const client = clients[0];
+    const fileBase = `${sanitizeFileName(client)}-scan-report-${stamp}`;
+    if (format === "pdf") {
+      triggerBlobDownload(buildClientPDFBlob(client, byClient[client]), `${fileBase}.pdf`);
+    } else {
+      const csv = buildClientCSV(client, byClient[client]);
+      triggerBlobDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${fileBase}.csv`);
+    }
+    return;
+  }
+
+  // Multiple clients — one file per client, bundled into a ZIP so it's never one combined file.
+  const zip = new JSZip();
+  clients.forEach(client => {
+    const fileBase = sanitizeFileName(client);
+    if (format === "pdf") {
+      const blob = buildClientPDFBlob(client, byClient[client]);
+      zip.file(`${fileBase}.pdf`, blob);
+    } else {
+      const csv = buildClientCSV(client, byClient[client]);
+      zip.file(`${fileBase}.csv`, csv);
+    }
+  });
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  triggerBlobDownload(zipBlob, `scan-reports-${stamp}.zip`);
 }
 
 function resetToClientSelect() {
