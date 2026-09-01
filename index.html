@@ -220,7 +220,7 @@
 
     <table id="scanTable">
       <thead>
-        <tr><th>#</th><th>AWB Number</th><th>Scan Time</th><th></th></tr>
+        <tr><th>#</th><th>AWB Number</th><th>Scan Time</th><th>Status</th><th></th></tr>
       </thead>
       <tbody id="scanTableBody"></tbody>
     </table>
@@ -924,7 +924,7 @@ function handleScanKey(e) {
       return;
     }
     const time = new Date().toLocaleString();
-    scanRows.push({ awb, time });
+    scanRows.push({ awb, time, status: "Good" });
     input.value = "";
     renderScanTable();
   }
@@ -934,12 +934,22 @@ function renderScanTable() {
   const body = document.getElementById("scanTableBody");
   body.innerHTML = "";
   scanRows.forEach((r, i) => {
+    if (!r.status) r.status = "Good";
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${i+1}</td><td>${r.awb}</td><td>${r.time}</td>
+      <td><select onchange="updateRowStatus(${i}, this.value)" style="width:auto;padding:6px 8px;font-size:13px;">
+        <option value="Good" ${r.status === "Good" ? "selected" : ""}>Good</option>
+        <option value="Damage" ${r.status === "Damage" ? "selected" : ""}>Damage</option>
+        <option value="Open" ${r.status === "Open" ? "selected" : ""}>Open</option>
+      </select></td>
       <td><button class="btn btn-outline" style="padding:4px 10px;font-size:12px;" onclick="removeRow(${i})">✕</button></td>`;
     body.appendChild(tr);
   });
   document.getElementById("scanCount").textContent = scanRows.length;
+}
+
+function updateRowStatus(i, val) {
+  if (scanRows[i]) scanRows[i].status = val;
 }
 
 function removeRow(i) {
@@ -966,7 +976,8 @@ async function finishCourier(mode) {
       client: currentClient,
       awb: r.awb,
       courier: currentCourier,
-      scanner: currentScanner
+      scanner: currentScanner,
+      status: r.status || "Good"
     }))
   };
 
@@ -978,7 +989,8 @@ async function finishCourier(mode) {
       client: currentClient,
       awb: r.awb,
       courier: currentCourier,
-      scanner: currentScanner
+      scanner: currentScanner,
+      status: r.status || "Good"
     });
   });
 
@@ -1177,8 +1189,8 @@ function csvEscape(val) {
 // Builds the full session CSV (detailed rows + both summary tables + grand total).
 // Used by both the Download button and the mail attachment, so they always match.
 function buildSessionCSV() {
-  const rows = [["Scan Date", "Client Name", "AWB", "Courier", "Scanner Name"]];
-  sessionAllRows.forEach(r => rows.push([r.scanDate, r.client, r.awb, r.courier, r.scanner]));
+  const rows = [["Scan Date", "Client Name", "AWB", "Courier", "Scanner Name", "Status"]];
+  sessionAllRows.forEach(r => rows.push([r.scanDate, r.client, r.awb, r.courier, r.scanner, r.status || "Good"]));
 
   const courierMap = {};
   sessionAllRows.forEach(r => {
